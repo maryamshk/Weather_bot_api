@@ -98,44 +98,27 @@ async function getCurrentWeather(lat, lon) {
 }
 
 async function getForecastWeather(lat, lon, requestedDate) {
-  const url = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${OPENWEATHERMAP_API_KEY}&units=metric`;
+  const url = `https://api.openweathermap.org/data/3.0/onecall?lat=${lat}&lon=${lon}&exclude=current,minutely,hourly,alerts&appid=${OPENWEATHERMAP_API_KEY}&units=metric`;
+  
   try {
     const response = await axios.get(url);
     const targetDate = new Date(requestedDate).toISOString().split('T')[0];
-    
-    // Find all forecasts for the requested date
-    const dailyForecasts = response.data.list.filter(item => {
-      return new Date(item.dt * 1000).toISOString().split('T')[0] === targetDate;
+
+    const dailyForecast = response.data.daily.find(day => {
+      const forecastDate = new Date(day.dt * 1000).toISOString().split('T')[0];
+      return forecastDate === targetDate;
     });
 
-    if (dailyForecasts.length === 0) return null;
-
-    // Calculate day/night averages
-    const dayTemps = dailyForecasts.map(f => f.main.temp);
-    const nightTemps = dailyForecasts.filter(f => {
-      const hours = new Date(f.dt * 1000).getHours();
-      return hours < 6 || hours > 18; 
-    }).map(f => f.main.temp);
+    if (!dailyForecast) return null;
 
     return {
-      tempDay: (dayTemps.reduce((a, b) => a + b, 0) / dayTemps.length).toFixed(1),
-      tempNight: nightTemps.length > 0 ? 
-        (nightTemps.reduce((a, b) => a + b, 0) / nightTemps.length).toFixed(1) : 'N/A',
-      description: mostFrequent(dailyForecasts.map(f => f.weather[0].description)),
-      humidity: (dailyForecasts.reduce((sum, f) => sum + f.main.humidity, 0) / dailyForecasts.length).toFixed(1)
+      tempDay: dailyForecast.temp.day.toFixed(1),
+      tempNight: dailyForecast.temp.night.toFixed(1),
+      description: dailyForecast.weather[0].description,
+      humidity: dailyForecast.humidity
     };
   } catch (error) {
-    console.error('Forecast error:', error.message);
+    console.error('One Call 3.0 Forecast error:', error.message);
     throw error;
   }
 }
-
-function mostFrequent(arr) {
-  const counts = {};
-  arr.forEach(item => { counts[item] = (counts[item] || 0) + 1; });
-  return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-}
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
